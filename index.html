@@ -1,5 +1,270 @@
-testdata
+CREATE TABLE Users (
+    UserID INT IDENTITY(1,1) PRIMARY KEY,
+    Username NVARCHAR(50) NOT NULL UNIQUE,
+    Password NVARCHAR(255) NOT NULL, -- Store hashed passwords for security
+    Role NVARCHAR(20) NOT NULL, -- Admin or Customer
+    Email NVARCHAR(100) NULL,
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
 
-test test
 
-123
+registration 
+protected void btnRegister_Click(object sender, EventArgs e)
+{
+    string username = txtUsername.Text;
+    string password = txtPassword.Text; // Hash this for security in real apps
+    string email = txtEmail.Text;
+    string role = ddlRole.SelectedValue;
+
+    string connectionString = "your_connection_string";
+    using (SqlConnection conn = new SqlConnection(connectionString))
+    {
+        string query = "INSERT INTO Users (Username, Password, Email, Role) VALUES (@Username, @Password, @Email, @Role)";
+        SqlCommand cmd = new SqlCommand(query, conn);
+        cmd.Parameters.AddWithValue("@Username", username);
+        cmd.Parameters.AddWithValue("@Password", password); // Hash in production
+        cmd.Parameters.AddWithValue("@Email", email);
+        cmd.Parameters.AddWithValue("@Role", role);
+
+        try
+        {
+            conn.Open();
+            cmd.ExecuteNonQuery();
+            lblMessage.Text = "Registration successful!";
+        }
+        catch (Exception ex)
+        {
+            lblMessage.Text = "Error: " + ex.Message;
+        }
+    }
+}
+
+
+login 
+protected void btnLogin_Click(object sender, EventArgs e)
+{
+    string username = txtUsername.Text;
+    string password = txtPassword.Text;
+
+    string connectionString = "your_connection_string";
+    using (SqlConnection conn = new SqlConnection(connectionString))
+    {
+        string query = "SELECT Role FROM Users WHERE Username = @Username AND Password = @Password";
+        SqlCommand cmd = new SqlCommand(query, conn);
+        cmd.Parameters.AddWithValue("@Username", username);
+        cmd.Parameters.AddWithValue("@Password", password);
+
+        try
+        {
+            conn.Open();
+            var role = cmd.ExecuteScalar();
+
+            if (role != null)
+            {
+                if (role.ToString() == "Admin")
+                {
+                    Response.Redirect("AdminDashboard.aspx");
+                }
+                else if (role.ToString() == "Customer")
+                {
+                    Response.Redirect("CustomerDashboard.aspx");
+                }
+            }
+            else
+            {
+                lblMessage.Text = "Invalid username or password.";
+            }
+        }
+        catch (Exception ex)
+        {
+            lblMessage.Text = "Error: " + ex.Message;
+        }
+    }
+}
+web config
+<configuration>
+  <connectionStrings>
+    <add name="DefaultConnection" connectionString="your_connection_string" providerName="System.Data.SqlClient" />
+  </connectionStrings>
+</configuration>
+
+tables
+CREATE TABLE Orders (
+    OrderID INT IDENTITY(1,1) PRIMARY KEY,      -- Unique identifier for each order
+    UserID INT NOT NULL,                        -- References the UserID from the Users table
+    OrderDate DATETIME DEFAULT GETDATE(),       -- When the order was placed
+    TotalAmount DECIMAL(10, 2) NOT NULL,        -- Total price of the order
+    Status NVARCHAR(50) DEFAULT 'Pending',      -- Status of the order (e.g., Pending, Completed)
+    FOREIGN KEY (UserID) REFERENCES Users(UserID)
+);
+CREATE TABLE MenuItems (
+    MenuItemID INT IDENTITY(1,1) PRIMARY KEY,   -- Unique identifier for each menu item
+    Name NVARCHAR(100) NOT NULL,               -- Name of the menu item
+    Description NVARCHAR(255) NULL,            -- Description of the menu item
+    Price DECIMAL(10, 2) NOT NULL,             -- Price of the item
+    Category NVARCHAR(50) NULL                 -- Category (e.g., Drinks, Snacks)
+);
+CREATE TABLE OrderDetails (
+    OrderDetailID INT IDENTITY(1,1) PRIMARY KEY, -- Unique identifier for each detail
+    OrderID INT NOT NULL,                        -- References the OrderID from Orders table
+    MenuItemID INT NOT NULL,                     -- References the MenuItemID from MenuItems table
+    Quantity INT NOT NULL,                       -- Number of items ordered
+    SubTotal DECIMAL(10, 2) NOT NULL,            -- Quantity * Price
+    FOREIGN KEY (OrderID) REFERENCES Orders(OrderID),
+    FOREIGN KEY (MenuItemID) REFERENCES MenuItems(MenuItemID)
+);
+CREATE TABLE Feedback (
+    FeedbackID INT IDENTITY(1,1) PRIMARY KEY,   -- Unique identifier for feedback
+    UserID INT NOT NULL,                        -- References the UserID from Users table
+    FeedbackText NVARCHAR(MAX) NOT NULL,        -- User feedback
+    Rating INT CHECK (Rating BETWEEN 1 AND 5),  -- Rating between 1 (worst) to 5 (best)
+    SubmittedAt DATETIME DEFAULT GETDATE(),     -- Date when feedback was submitted
+    FOREIGN KEY (UserID) REFERENCES Users(UserID)
+);
+CREATE TABLE Inventory (
+    InventoryID INT IDENTITY(1,1) PRIMARY KEY,  -- Unique identifier for inventory items
+    ItemName NVARCHAR(100) NOT NULL,           -- Name of the inventory item
+    Quantity INT NOT NULL,                     -- Quantity available
+    Unit NVARCHAR(50) NOT NULL,                -- Unit of measurement (e.g., kg, liters)
+    ReorderLevel INT NOT NULL,                 -- Minimum stock before reorder is needed
+);
+CREATE TABLE Payments (
+    PaymentID INT IDENTITY(1,1) PRIMARY KEY,    -- Unique identifier for payments
+    OrderID INT NOT NULL,                       -- References OrderID from Orders
+    PaymentDate DATETIME DEFAULT GETDATE(),     -- Date and time of payment
+    AmountPaid DECIMAL(10, 2) NOT NULL,         -- Amount paid
+    PaymentMethod NVARCHAR(50) NOT NULL,        -- Payment method (e.g., Cash, Card)
+    FOREIGN KEY (OrderID) REFERENCES Orders(OrderID)
+);
+CREATE TABLE Roles (
+    RoleID INT IDENTITY(1,1) PRIMARY KEY,       -- Unique identifier for roles
+    RoleName NVARCHAR(50) NOT NULL UNIQUE,     -- Role name (e.g., Admin, Customer)
+    Description NVARCHAR(255) NULL             -- Role description
+);
+ALTER TABLE Users
+ADD RoleID INT FOREIGN KEY REFERENCES Roles(RoleID);
+
+CREATE TABLE Feedback (
+    FeedbackID INT IDENTITY(1,1) PRIMARY KEY,   -- Unique identifier for feedback
+    UserID INT NOT NULL,                        -- References UserID from Users
+    FeedbackText NVARCHAR(MAX) NOT NULL,        -- Feedback text
+    Rating INT CHECK (Rating BETWEEN 1 AND 5),  -- Rating from 1 to 5
+    SubmittedAt DATETIME DEFAULT GETDATE(),     -- Date feedback was submitted
+    FOREIGN KEY (UserID) REFERENCES Users(UserID)
+);
+CREATE TABLE LoyaltyTransactions (
+    TransactionID INT IDENTITY(1,1) PRIMARY KEY,
+    UserID INT NOT NULL,                    -- References the UserID from Users
+    PointsEarned INT DEFAULT 0,             -- Points earned in this transaction
+    PointsRedeemed INT DEFAULT 0,           -- Points redeemed in this transaction
+    TransactionDate DATETIME DEFAULT GETDATE(), -- Date of transaction
+    OrderID INT NULL,                       -- References an order (if applicable)
+    FOREIGN KEY (UserID) REFERENCES Users(UserID)
+);
+
+using System;
+using System.Data.SqlClient;
+using System.Configuration;
+
+namespace CafeManagementSystem
+{
+    public partial class Register : System.Web.UI.Page
+    {
+        protected void Page_Load(object sender, EventArgs e)
+        {
+        }
+
+        protected void btnRegister_Click(object sender, EventArgs e)
+        {
+            string username = txtUsername.Text.Trim();
+            string password = txtPassword.Text.Trim();
+            string role = ddlRole.SelectedValue;
+
+            // Validate inputs
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(role))
+            {
+                lblMessage.Text = "All fields are required.";
+                return;
+            }
+
+            // Insert user into the database
+            string connectionString = ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
+            using (SqlConnection con = new SqlConnection(connectionString))
+            {
+                string query = "INSERT INTO Users (Username, Password, Role, LoyaltyPoints) VALUES (@Username, @Password, @Role, 0)";
+                using (SqlCommand cmd = new SqlCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@Username", username);
+                    cmd.Parameters.AddWithValue("@Password", password); // Replace with hashed password for security
+                    cmd.Parameters.AddWithValue("@Role", role);
+
+                    con.Open();
+                    int rows = cmd.ExecuteNonQuery();
+                    if (rows > 0)
+                    {
+                        lblMessage.ForeColor = System.Drawing.Color.Green;
+                        lblMessage.Text = "Registration successful! Redirecting to login...";
+                        Response.AddHeader("REFRESH", "2;URL=Login.aspx");
+                    }
+                    else
+                    {
+                        lblMessage.Text = "Registration failed. Please try again.";
+                    }
+                }
+            }
+        }
+    }
+}
+
+protected void btnLogin_Click(object sender, EventArgs e)
+{
+    string username = txtUsername.Text.Trim();
+    string password = txtPassword.Text.Trim();
+
+    if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+    {
+        lblMessage.Text = "Please enter both username and password.";
+        return;
+    }
+
+    string connectionString = ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
+    using (SqlConnection con = new SqlConnection(connectionString))
+    {
+        string query = "SELECT UserID, Role FROM Users WHERE Username = @Username AND Password = @Password";
+        using (SqlCommand cmd = new SqlCommand(query, con))
+        {
+            cmd.Parameters.AddWithValue("@Username", username);
+            cmd.Parameters.AddWithValue("@Password", password);
+
+            con.Open();
+            SqlDataReader reader = cmd.ExecuteReader();
+            if (reader.HasRows)
+            {
+                reader.Read();
+                int userId = Convert.ToInt32(reader["UserID"]);
+                string role = reader["Role"].ToString();
+
+                // Debug log or breakpoint
+                System.Diagnostics.Debug.WriteLine($"UserID: {userId}, Role: {role}");
+
+                // Set session
+                Session["UserID"] = userId;
+                Session["Role"] = role;
+
+                // Redirect based on role
+                if (role == "Admin")
+                {
+                    Response.Redirect("~/AdminDashboard.aspx");
+                }
+                else if (role == "Customer")
+                {
+                    Response.Redirect("~/CustomerDashboard.aspx");
+                }
+            }
+            else
+            {
+                lblMessage.Text = "Invalid username or password.";
+            }
+        }
+    }
+}
